@@ -1,0 +1,32 @@
+name: ns100
+dataset: ns100
+data_env: BOUNDARY_FSOR_NS100_DATA
+checkpoint_env: BOUNDARY_FSOR_NS100_CHECKPOINT
+metadata_env: BOUNDARY_FSOR_NS100_METADATA
+sample_rate: 16000
+window_size: 400
+hop_size: 160
+mel_bins: 128
+fmin: 0
+fmax: 8000
+num_classes: 100
+meta_train_classes: [0, 59]
+validation_classes: [60, 79]
+test_classes: [80, 99]
+ways: 5
+shots: 5
+queries: 15
+open_ways: 5
+train_episodes: 6000
+validation_episodes: 300
+test_episodes: 1000
+seed: 3420
+base_epochs: 30
+base_lr: 0.005
+views: 10
+feature_dropout: 0.3
+uncertainty_mi_weight: 1.0
+curriculum_warmup: 0.25
+hidden_dim: 256
+boundary_lr: 0.0003
+margin: 0.10

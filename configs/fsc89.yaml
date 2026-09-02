@@ -1,0 +1,32 @@
+name: fsc89
+dataset: fsc89
+data_env: BOUNDARY_FSOR_FSC89_DATA
+checkpoint_env: BOUNDARY_FSOR_FSC89_CHECKPOINT
+metadata_env: BOUNDARY_FSOR_FSC89_METADATA
+sample_rate: 16000
+window_size: 400
+hop_size: 160
+mel_bins: 128
+fmin: 0
+fmax: 8000
+num_classes: 89
+meta_train_classes: [0, 48]
+validation_classes: [49, 68]
+test_classes: [69, 88]
+ways: 5
+shots: 5
+queries: 15
+open_ways: 5
+train_episodes: 6000
+validation_episodes: 300
+test_episodes: 1000
+seed: 3420
+base_epochs: 30
+base_lr: 0.005
+views: 10
+feature_dropout: 0.3
+uncertainty_mi_weight: 1.0
+curriculum_warmup: 0.25
+hidden_dim: 256
+boundary_lr: 0.0003
+margin: 0.10
