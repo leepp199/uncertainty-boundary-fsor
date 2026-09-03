@@ -6,4 +6,6 @@ __pycache__/
 artifacts/features/
 artifacts/checkpoints/
 artifacts/results/
+artifacts/manifests/
+artifacts/tables/
 *.log

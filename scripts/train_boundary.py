@@ -21,7 +21,8 @@ sys.path.insert(0, str(ROOT))
 from boundary_fsor.boundary import BoundaryCompanion, boundary_loss
 from boundary_fsor.config import load_config
 from boundary_fsor.data import load_cache
-from boundary_fsor.episodes import EpisodeSampler, class_pair_similarity, curriculum_weights
+from boundary_fsor.episodes import EpisodeSampler
+from boundary_fsor.risk import BoundaryRiskTable
 from boundary_fsor.uncertainty import class_uncertainty, predictive_uncertainty
 
 
@@ -56,11 +57,14 @@ def main() -> None:
         view_probabilities, cfg["uncertainty_mi_weight"],
     )
     class_scores = class_uncertainty(uncertainty, torch.from_numpy(cache["labels"]))
+    risk_table = BoundaryRiskTable.from_statistics(
+        cache["embeddings"], cache["labels"], class_scores,
+    )
     sampler = EpisodeSampler(
         cache["embeddings"], cache["labels"], cfg["ways"], cfg["shots"],
         cfg["queries"], cfg["open_ways"], seed,
     )
-    pair_scores = class_pair_similarity(cache["embeddings"], cache["labels"])
+    pair_scores = risk_table.pair_score_dict()
     device = torch.device(args.device)
     model = BoundaryCompanion(
         cache["embeddings"].shape[1], cfg["hidden_dim"],
@@ -77,7 +81,7 @@ def main() -> None:
         progress = episode_id / max(total - 1, 1)
         weights = None
         if args.sampling == "uncertainty" and args.curriculum_components in {"class", "joint"}:
-            weights = curriculum_weights(class_scores, progress, warmup)
+            weights = risk_table.class_probability(progress, warmup)
         active_pairs = (
             pair_scores if args.sampling == "uncertainty"
             and args.curriculum_components in {"pair", "joint"} else None
@@ -112,6 +116,7 @@ def main() -> None:
         "state_dict": model.state_dict(),
         "config_sha256": cfg["config_sha256"],
         "class_uncertainty": class_scores,
+        "boundary_risk": risk_table.state_dict(),
         "history": history,
         "sampling": args.sampling,
         "curriculum_components": args.curriculum_components,

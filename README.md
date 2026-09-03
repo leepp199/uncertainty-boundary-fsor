@@ -28,6 +28,24 @@ reported as complementary open-set measures.
 
 ## Offline workflow
 
+The default command performs protocol auditing, base training, feature
+extraction, all matched boundary controls, and validation-only model selection.
+It does not open the final-test classes:
+
+```bash
+python scripts/run_full_experiment.py --config configs/ls100.yaml --device cuda:0
+```
+
+After the curriculum choice is frozen, the same entry point produces the
+test ledger, paired significance test, difficulty analysis, and paper table:
+
+```bash
+python scripts/run_full_experiment.py --config configs/ls100.yaml \
+  --device cuda:0 --frozen-test
+```
+
+The individual stages remain callable for controlled experiments:
+
 ```bash
 bash scripts/offline_preflight.sh
 python scripts/extract_features.py --config configs/ls100.yaml --split train
@@ -59,3 +77,23 @@ do not download datasets or model weights.
 
 External methods are included only after they are rerun with the same class
 splits and episode seeds.
+
+## Implementation map
+
+- `boundary_fsor/encoder.py`: log-mel front end and ResNet-18 audio encoder;
+- `boundary_fsor/uncertainty.py`: entropy and mutual-information uncertainty;
+- `boundary_fsor/risk.py`: class instability, pairwise intrusion risk, and the
+  easy-to-uniform-to-hard curriculum;
+- `boundary_fsor/episodes.py`: local-seed, class-disjoint 5-way 5-shot episodes;
+- `boundary_fsor/boundary.py`: class-conditional boundary companions and margin
+  objective;
+- `boundary_fsor/audit.py`: split, row-order, checkpoint, and environment
+  manifests;
+- `scripts/analyze_boundary_difficulty.py`: AUROC gains stratified by unknown
+  proximity to the support prototypes;
+- `scripts/build_results_table.py`: CSV and Markdown tables built only from raw
+  frozen ledgers.
+
+The tests cover exact support counts, split disjointness, seed isolation,
+curriculum direction, boundary correspondence, manifest hashing, and stochastic
+uncertainty behavior.

@@ -26,13 +26,14 @@ from boundary_fsor.data import WaveDataset, load_rows, pad_collate
 from boundary_fsor.encoder import AudioEncoder
 
 
-def accuracy(model, loader, device):
+def accuracy(model, loader, device, class_start, class_end):
     model.eval(); correct = total = 0
     with torch.inference_mode():
         for wave, labels, _ in loader:
             wave, labels = wave.to(device), labels.to(device)
-            predictions = model.classifier(model(wave, normalize=False)).argmax(1)
-            correct += int((predictions == labels).sum()); total += labels.numel()
+            logits = model.classifier(model(wave, normalize=False))[:, class_start:class_end + 1]
+            predictions = logits.argmax(1)
+            correct += int((predictions == labels - class_start).sum()); total += labels.numel()
     return correct / max(total, 1)
 
 
@@ -44,7 +45,8 @@ def main():
     if not cfg["data_root"] or not Path(cfg["data_root"]).exists():
         raise FileNotFoundError(f"dataset is unavailable: {cfg['data_root']!r}")
     seed = int(cfg["seed"]); random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
-    lo, hi = cfg["meta_train_classes"]; classes = range(int(lo), int(hi) + 1)
+    lo, hi = (int(value) for value in cfg["meta_train_classes"])
+    classes = range(lo, hi + 1)
     train_rows = load_rows(cfg, "train", classes); val_rows = load_rows(cfg, "val", classes)
     generator = torch.Generator().manual_seed(seed)
     train_loader = DataLoader(WaveDataset(train_rows), batch_size=args.batch_size, shuffle=True,
@@ -63,12 +65,13 @@ def main():
         model.train(); loss_sum = correct = count = 0
         for wave, labels, _ in train_loader:
             wave, labels = wave.to(device), labels.to(device)
-            logits = model.classifier(model(wave, augment=True, normalize=False))
-            loss = F.cross_entropy(logits, labels)
+            logits = model.classifier(model(wave, augment=True, normalize=False))[:, lo:hi + 1]
+            local_labels = labels - lo
+            loss = F.cross_entropy(logits, local_labels)
             optimizer.zero_grad(set_to_none=True); loss.backward(); optimizer.step()
             loss_sum += float(loss.detach()) * labels.numel()
-            correct += int((logits.argmax(1) == labels).sum()); count += labels.numel()
-        scheduler.step(); val_acc = accuracy(model, val_loader, device)
+            correct += int((logits.argmax(1) == local_labels).sum()); count += labels.numel()
+        scheduler.step(); val_acc = accuracy(model, val_loader, device, lo, hi)
         record = {"epoch": epoch + 1, "loss": loss_sum / count, "train_acc": correct / count,
                   "val_acc": val_acc}; history.append(record); print(json.dumps(record))
         if val_acc > best:

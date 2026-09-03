@@ -141,6 +141,8 @@ def main() -> None:
     )
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--checkpoint", default=None)
+    parser.add_argument("--result-name", default=None,
+                        help="Output directory name for component ablations.")
     parser.add_argument("--validation-only", action="store_true")
     args = parser.parse_args()
     cfg = load_config(args.config)
@@ -167,14 +169,32 @@ def main() -> None:
         validation_unknown = validation[3] + boundary_weight * validation[1]
     else:
         validation_known, validation_unknown = validation[0], validation[1]
+        labels = np.r_[np.ones(len(validation_known)), np.zeros(len(validation_unknown))]
+        validation_auroc = float(
+            roc_auc_score(labels, np.r_[validation_known, validation_unknown])
+        )
+    result_name = args.result_name or args.method
+    validation_threshold = float(np.quantile(validation_known, 0.05))
     if args.validation_only:
-        print(json.dumps({
+        validation_summary = summarize(
+            validation_known, validation_unknown, validation[4],
+        )
+        validation_summary.update({
+            "method": args.method,
+            "result_name": result_name,
             "checkpoint": str(checkpoint),
             "boundary_weight": boundary_weight,
             "validation_auroc": validation_auroc,
-        }, indent=2))
+            "validation_threshold": validation_threshold,
+            "split": "validation",
+        })
+        output = ROOT / "artifacts" / "results" / cfg["name"] / result_name
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "validation.json").write_text(
+            json.dumps(validation_summary, indent=2) + "\n", encoding="utf-8",
+        )
+        print(json.dumps(validation_summary, indent=2))
         return
-    validation_threshold = float(np.quantile(validation_known, 0.05))
     test = evaluate_split(
         cfg, "test", args.method, checkpoint, torch.device(args.device),
         int(cfg["test_episodes"]),
@@ -186,13 +206,16 @@ def main() -> None:
         test_known, test_unknown = test[0], test[1]
     summary = summarize(test_known, test_unknown, test[4])
     summary.update({
+        "method": args.method,
+        "result_name": result_name,
+        "checkpoint": str(checkpoint) if args.method in BOUNDARY_METHODS else None,
         "boundary_weight": boundary_weight,
         "validation_auroc_at_selected_weight": validation_auroc,
         "validation_threshold": validation_threshold,
         "known_acceptance_at_threshold": float(np.mean(test_known >= validation_threshold)),
         "unknown_rejection_at_threshold": float(np.mean(test_unknown < validation_threshold)),
     })
-    output = ROOT / "artifacts" / "results" / cfg["name"] / args.method
+    output = ROOT / "artifacts" / "results" / cfg["name"] / result_name
     output.mkdir(parents=True, exist_ok=True)
     (output / "raw_test.jsonl").write_text(
         "\n".join(json.dumps(row) for row in test[5]) + "\n", encoding="utf-8",
