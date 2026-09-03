@@ -80,14 +80,18 @@ splits and episode seeds.
 
 ## Implementation map
 
-- `boundary_fsor/encoder.py`: log-mel front end and ResNet-18 audio encoder;
-- `boundary_fsor/uncertainty.py`: entropy and mutual-information uncertainty;
-- `boundary_fsor/risk.py`: class instability, pairwise intrusion risk, and the
+- `boundary_fsor/models/`: ResNet-18 audio encoder and class-conditional
+  boundary-companion network;
+- `boundary_fsor/data/`: audio metadata, wave batching, and local-seed
+  class-disjoint 5-way 5-shot episodes;
+- `boundary_fsor/training/uncertainty.py`: entropy and mutual-information
+  uncertainty;
+- `boundary_fsor/training/curriculum.py`: class instability, pairwise intrusion risk, and the
   easy-to-uniform-to-hard curriculum;
-- `boundary_fsor/episodes.py`: local-seed, class-disjoint 5-way 5-shot episodes;
-- `boundary_fsor/boundary.py`: class-conditional boundary companions and margin
-  objective;
-- `boundary_fsor/audit.py`: split, row-order, checkpoint, and environment
+- `boundary_fsor/training/base_trainer.py` and `boundary_trainer.py`: complete
+  optimization and checkpoint-selection loops;
+- `boundary_fsor/evaluation/`: AUROC, AUPR, FPR95, OSCR, and known accuracy;
+- `boundary_fsor/reproducibility/`: split, row-order, checkpoint, and environment
   manifests;
 - `scripts/analyze_boundary_difficulty.py`: AUROC gains stratified by unknown
   proximity to the support prototypes;

@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from boundary_fsor.uncertainty import predictive_uncertainty
+from boundary_fsor.training.uncertainty import predictive_uncertainty
 
 
 class UncertaintyTest(unittest.TestCase):

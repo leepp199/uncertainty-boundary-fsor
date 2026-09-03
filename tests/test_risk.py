@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from boundary_fsor.risk import BoundaryRiskTable, curriculum_rank_weights
+from boundary_fsor.training.curriculum import BoundaryRiskTable, curriculum_rank_weights
 
 
 class BoundaryRiskTest(unittest.TestCase):

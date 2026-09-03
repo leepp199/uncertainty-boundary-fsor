@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from boundary_fsor.data import load_rows
-from boundary_fsor.episodes import EpisodeSampler, scheduled_rank_weights
+from boundary_fsor.data.audio import load_rows
+from boundary_fsor.data.episodes import EpisodeSampler, scheduled_rank_weights
 
 
 class ProtocolTest(unittest.TestCase):

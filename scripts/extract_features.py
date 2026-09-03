@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from boundary_fsor.config import load_config, require_assets
-from boundary_fsor.data import WaveDataset, load_rows, pad_collate
-from boundary_fsor.encoder import AudioEncoder, load_local_checkpoint
+from boundary_fsor.data.audio import WaveDataset, load_rows, pad_collate
+from boundary_fsor.models.encoder import AudioEncoder, load_local_checkpoint
 
 
 def main():

@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from boundary_fsor.boundary import BoundaryCompanion, boundary_margin
+from boundary_fsor.models.boundary import BoundaryCompanion, boundary_margin
 
 
 class BoundaryTest(unittest.TestCase):

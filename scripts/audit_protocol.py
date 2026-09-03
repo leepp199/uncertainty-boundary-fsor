@@ -9,12 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from boundary_fsor.audit import (
+from boundary_fsor.reproducibility.audit import (
     git_revision, offline_environment, rows_manifest, validate_class_disjointness,
     write_json,
 )
 from boundary_fsor.config import load_config
-from boundary_fsor.data import load_rows
+from boundary_fsor.data.audio import load_rows
 
 
 def main() -> None:

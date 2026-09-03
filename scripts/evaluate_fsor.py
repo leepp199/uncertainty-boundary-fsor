@@ -19,11 +19,11 @@ from sklearn.metrics import roc_auc_score
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from boundary_fsor.boundary import BoundaryCompanion, boundary_margin, prototypes_from_support
+from boundary_fsor.models.boundary import BoundaryCompanion, boundary_margin, prototypes_from_support
 from boundary_fsor.config import load_config
-from boundary_fsor.data import load_cache
-from boundary_fsor.episodes import EpisodeSampler
-from boundary_fsor.metrics import summarize
+from boundary_fsor.data.audio import load_cache
+from boundary_fsor.data.episodes import EpisodeSampler
+from boundary_fsor.evaluation.metrics import summarize
 
 
 BOUNDARY_METHODS = {"global_boundary", "class_boundary", "uncertainty_boundary"}

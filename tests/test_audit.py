@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from boundary_fsor.audit import rows_manifest, validate_class_disjointness
-from boundary_fsor.data import AudioRow
+from boundary_fsor.reproducibility.audit import rows_manifest, validate_class_disjointness
+from boundary_fsor.data.audio import AudioRow
 
 
 class AuditTest(unittest.TestCase):
