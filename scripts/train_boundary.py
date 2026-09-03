@@ -30,6 +30,10 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--sampling", choices=["uniform", "uncertainty"],
                         default="uncertainty")
+    parser.add_argument("--curriculum-components", choices=["class", "pair", "joint"],
+                        default="joint")
+    parser.add_argument("--warmup", type=float, default=None)
+    parser.add_argument("--tag", default=None)
     parser.add_argument("--global-boundary", action="store_true")
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
@@ -66,16 +70,20 @@ def main() -> None:
         model.parameters(), lr=float(cfg["boundary_lr"]), weight_decay=1e-4,
     )
     total = int(cfg["train_episodes"])
+    warmup = float(cfg["curriculum_warmup"] if args.warmup is None else args.warmup)
     history = []
     model.train()
     for episode_id in range(total):
         progress = episode_id / max(total - 1, 1)
         weights = None
-        if args.sampling == "uncertainty":
-            weights = curriculum_weights(class_scores, progress, cfg["curriculum_warmup"])
+        if args.sampling == "uncertainty" and args.curriculum_components in {"class", "joint"}:
+            weights = curriculum_weights(class_scores, progress, warmup)
+        active_pairs = (
+            pair_scores if args.sampling == "uncertainty"
+            and args.curriculum_components in {"pair", "joint"} else None
+        )
         episode = sampler.sample(
-            episode_id, weights, pair_scores if args.sampling == "uncertainty" else None,
-            progress=progress, warmup=cfg["curriculum_warmup"],
+            episode_id, weights, active_pairs, progress=progress, warmup=warmup,
         )
         tensors = [
             torch.from_numpy(value).to(device)
@@ -97,7 +105,7 @@ def main() -> None:
             history.append(record)
             print(json.dumps(record))
 
-    tag = "global" if args.global_boundary else args.sampling
+    tag = args.tag or ("global" if args.global_boundary else args.sampling)
     output = ROOT / "artifacts" / "checkpoints" / cfg["name"] / f"boundary_{tag}.pth"
     output.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
@@ -106,6 +114,8 @@ def main() -> None:
         "class_uncertainty": class_scores,
         "history": history,
         "sampling": args.sampling,
+        "curriculum_components": args.curriculum_components,
+        "curriculum_warmup": warmup,
         "global_boundary": args.global_boundary,
     }, output)
     print(output)

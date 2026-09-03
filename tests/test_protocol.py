@@ -54,6 +54,24 @@ class ProtocolTest(unittest.TestCase):
             self.assertEqual([row.label for row in rows], [60])
             self.assertTrue(rows[0].path.endswith("validation-class.wav"))
 
+    def test_ns100_base_selection_uses_official_validation_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); metadata = root / "meta"; metadata.mkdir()
+            pd.DataFrame([{"instrument": "a", "audio_source": "nsynth-train",
+                           "filename": "training-row"}]).to_csv(
+                               metadata / "nsynth-100-fs_train.csv", index=False)
+            pd.DataFrame([{"instrument": "b", "audio_source": "nsynth-valid",
+                           "filename": "base-validation-row"}]).to_csv(
+                               metadata / "nsynth-100-fs_val.csv", index=False)
+            (metadata / "nsynth-100-fs_vocab.json").write_text(
+                json.dumps({"a": 60, "b": 0}), encoding="utf-8")
+            cfg = {"dataset": "ns100", "data_root": str(root),
+                   "metadata_root": str(metadata), "validation_classes": [55, 79],
+                   "meta_train_classes": [0, 54], "test_classes": [80, 99]}
+            rows = load_rows(cfg, "val", classes=range(55))
+            self.assertEqual([row.label for row in rows], [0])
+            self.assertTrue(rows[0].path.endswith("base-validation-row.wav"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,6 @@
-# Uncertainty-Ordered Boundary Learning for Audio FSOR
+# Not All Unknowns Are Equally Hard
+
+## Uncertainty-Ordered Boundary Learning for Few-Shot Open-Set Audio Recognition
 
 This repository studies one question: **how should pseudo-unknown
 episodes be ordered when the difficulty of class boundaries is uneven?**
@@ -32,7 +34,12 @@ python scripts/extract_features.py --config configs/ls100.yaml --split train
 python scripts/extract_features.py --config configs/ls100.yaml --split val
 python scripts/extract_features.py --config configs/ls100.yaml --split test
 python scripts/train_boundary.py --config configs/ls100.yaml --sampling uniform
-python scripts/train_boundary.py --config configs/ls100.yaml --sampling uncertainty
+python scripts/train_boundary.py --config configs/ls100.yaml \
+  --sampling uncertainty --curriculum-components class --tag uncertainty_class
+python scripts/train_boundary.py --config configs/ls100.yaml \
+  --sampling uncertainty --curriculum-components pair --tag uncertainty_pair
+python scripts/train_boundary.py --config configs/ls100.yaml \
+  --sampling uncertainty --curriculum-components joint --tag uncertainty
 bash scripts/run_comparisons.sh configs/ls100.yaml
 python scripts/paired_significance.py --dataset ls100 \
   --baseline prototype --method uncertainty_boundary

@@ -140,6 +140,8 @@ def main() -> None:
         default="uncertainty_boundary",
     )
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--checkpoint", default=None)
+    parser.add_argument("--validation-only", action="store_true")
     args = parser.parse_args()
     cfg = load_config(args.config)
     checkpoint_tag = {
@@ -147,7 +149,7 @@ def main() -> None:
         "class_boundary": "uniform",
         "uncertainty_boundary": "uncertainty",
     }.get(args.method, "")
-    checkpoint = (
+    checkpoint = Path(args.checkpoint) if args.checkpoint else (
         ROOT / "artifacts" / "checkpoints" / cfg["name"] /
         f"boundary_{checkpoint_tag}.pth"
     )
@@ -165,6 +167,13 @@ def main() -> None:
         validation_unknown = validation[3] + boundary_weight * validation[1]
     else:
         validation_known, validation_unknown = validation[0], validation[1]
+    if args.validation_only:
+        print(json.dumps({
+            "checkpoint": str(checkpoint),
+            "boundary_weight": boundary_weight,
+            "validation_auroc": validation_auroc,
+        }, indent=2))
+        return
     validation_threshold = float(np.quantile(validation_known, 0.05))
     test = evaluate_split(
         cfg, "test", args.method, checkpoint, torch.device(args.device),

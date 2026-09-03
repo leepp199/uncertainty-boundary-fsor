@@ -10,8 +10,8 @@ mel_bins: 128
 fmin: 0
 fmax: 8000
 num_classes: 100
-meta_train_classes: [0, 59]
-validation_classes: [60, 79]
+meta_train_classes: [0, 54]
+validation_classes: [55, 79]
 test_classes: [80, 99]
 ways: 5
 shots: 5

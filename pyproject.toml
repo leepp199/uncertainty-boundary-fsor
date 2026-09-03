@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "uncertainty-boundary-fsor"
 version = "0.1.0"
-description = "Uncertainty-ordered class-conditional boundary learning for audio FSOR"
+description = "Uncertainty-ordered boundary learning for few-shot open-set audio recognition"
 requires-python = ">=3.8"
 
 [tool.setuptools.packages.find]

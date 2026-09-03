@@ -37,7 +37,12 @@ def load_rows(cfg: dict, split: str, classes=None) -> list[AudioRow]:
         # For class-disjoint FSOR model selection, labels 60--79 are therefore
         # taken from the training CSV; the final labels 80--99 remain confined
         # to the test CSV.  Class filters below keep both pools disjoint.
-        source_split = "train" if split == "val" else split
+        # The official validation file covers labels 0--54.  Base checkpoint
+        # selection therefore uses it for those classes, while class-disjoint
+        # FSOR validation labels 55--79 are drawn from the training CSV.
+        source_split = split
+        if split == "val" and classes and max(classes) > 54:
+            source_split = "train"
         table = pd.read_csv(meta / f"nsynth-100-fs_{source_split}.csv")
         vocab = json.loads((meta / "nsynth-100-fs_vocab.json").read_text(encoding="utf-8"))
         rows = []
