@@ -15,6 +15,7 @@ validation_classes: [60, 79]
 test_classes: [80, 99]
 ways: 5
 shots: 5
+shot_settings: [1, 5]
 queries: 15
 open_ways: 5
 train_episodes: 6000
@@ -26,7 +27,15 @@ base_lr: 0.005
 views: 10
 feature_dropout: 0.3
 uncertainty_mi_weight: 1.0
-curriculum_warmup: 0.25
+normalization_stabilizer: 1.0e-8
+ces_epsilon: 0.10
+ces_beta_start: -2.0
+ces_beta_end: 2.0
+ces_transition_episodes: 1500
 hidden_dim: 256
+attention_heads: 1
+attention_dropout: 0.1
 boundary_lr: 0.0003
+boundary_weight_decay: 0.0001
 margin: 0.10
+unknown_loss_weight: 1.0

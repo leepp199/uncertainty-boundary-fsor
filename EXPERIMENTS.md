@@ -1,24 +1,34 @@
-# Experiment ledger contract
+# Experiment records
 
-An experiment can enter the paper only when its record contains:
+Every reported run is represented by local artifacts rather than handwritten
+table entries. A complete record contains:
 
-- repository commit and configuration SHA-256;
-- local checkpoint SHA-256 and split-specific feature manifest;
-- disjoint meta-train, validation, and final-test class ranges;
-- validation-selected threshold with no final-test refitting;
-- raw known and unknown scores for every shared episode seed;
-- matched prototype, energy, global-boundary, uniform class-boundary, and
-  uncertainty-ordered class-boundary results.
+- the repository revision and configuration SHA-256;
+- the encoder checkpoint SHA-256;
+- ordered sample manifests for meta-training, validation, and test partitions;
+- the shot count, episode seed, known classes, and unknown classes for each task;
+- raw known and unknown decision scores;
+- known-class correctness before rejection;
+- the metric summary generated from the raw scores.
 
-The previous global-local anchor experiment is retired because it addresses a
-different mechanism. Its numbers are not evidence for the present paper.
+Development runs stop after validation. Test audio and test metadata are opened
+only by a command containing `--frozen-test`.
 
-## Current status
+## Main experiments
 
-LS-100 is complete under the isolated evaluator. Over 1,000 paired final
-episodes, uncertainty-ordered class-conditional boundary learning preserves
-96.39% known accuracy and reaches 95.43% AUROC, compared with 95.26% for maximum
-prototype confidence and 95.40% for the same boundary model with uniform episode
-sampling. The paired AUROC gain over prototype confidence is 0.165 points with a
-95% bootstrap interval of [0.138, 0.193]. NS-100 and FSC-89 are being rerun with
-the same code before the cross-domain table is frozen.
+```bash
+python scripts/run_full_experiment.py --config configs/ls100.yaml --shots 1 5
+python scripts/run_full_experiment.py --config configs/ns100.yaml --shots 1 5
+python scripts/run_full_experiment.py --config configs/fsc89.yaml --shots 1 5
+```
+
+Repeat the same commands with `--frozen-test` after the method and configuration
+are fixed. Result tables are generated from `raw_scores.npz` and `summary.json`;
+no result value is embedded in source code.
+
+## Component controls
+
+The pipeline evaluates maximum positive-prototype similarity, energy scoring, a
+shared global negative prototype, TBG with uniform episode sampling, CES using
+only class uncertainty, CES using only class similarity, and the full CES+TBG
+method. All controls use the same feature cache and episode seeds.

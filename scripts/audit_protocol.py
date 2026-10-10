@@ -38,7 +38,8 @@ def main() -> None:
         "data": manifests,
         "test_metadata_opened": bool(args.include_test),
         "episode_protocol": {
-            "ways": int(cfg["ways"]), "shots": int(cfg["shots"]),
+            "ways": int(cfg["ways"]),
+            "shot_settings": [int(value) for value in cfg["shot_settings"]],
             "known_queries_per_class": int(cfg["queries"]),
             "unknown_ways": int(cfg["open_ways"]),
             "validation_episodes": int(cfg["validation_episodes"]),

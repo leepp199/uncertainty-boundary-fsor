@@ -53,7 +53,7 @@ def main():
         for wave, target, batch_paths in tqdm(loader, desc=f"extract {cfg['name']} {args.split}"):
             wave = wave.to(device, non_blocking=True)
             z, p = model.stochastic_predictions(wave, views=int(cfg["views"]))
-            embeddings.append(z.mean(1).cpu().numpy())
+            embeddings.append(z.cpu().numpy())
             probabilities.append(p.cpu().numpy())
             labels.append(target.numpy())
             paths.extend(batch_paths)

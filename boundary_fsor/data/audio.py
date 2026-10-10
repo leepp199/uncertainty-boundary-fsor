@@ -33,13 +33,8 @@ def load_rows(cfg: dict, split: str, classes=None) -> list[AudioRow]:
                 for r in table.itertuples() if int(r.label) in classes]
     if cfg["dataset"] == "ns100":
         meta = Path(cfg["metadata_root"])
-        # The published NS-100 validation CSV contains only base labels 0--54.
-        # For class-disjoint FSOR model selection, labels 60--79 are therefore
-        # taken from the training CSV; the final labels 80--99 remain confined
-        # to the test CSV.  Class filters below keep both pools disjoint.
-        # The official validation file covers labels 0--54.  Base checkpoint
-        # selection therefore uses it for those classes, while class-disjoint
-        # FSOR validation labels 55--79 are drawn from the training CSV.
+        # The official validation CSV covers base labels 0--54. The disjoint
+        # FOAC validation labels 55--79 are read from the training CSV.
         source_split = split
         if split == "val" and classes and max(classes) > 54:
             source_split = "train"

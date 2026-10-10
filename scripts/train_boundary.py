@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line entry point for boundary curriculum training."""
+"""Command-line entry point for CES and TBG meta-training."""
 
 import sys
 from pathlib import Path

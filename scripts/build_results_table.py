@@ -14,12 +14,13 @@ METRICS = ("known_acc", "auroc", "aupr_known", "fpr95", "oscr")
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", required=True)
+    parser.add_argument("--shots", type=int, choices=[1, 5], required=True)
     parser.add_argument("--methods", nargs="+", default=[
-        "prototype", "energy", "global_boundary", "class_boundary",
-        "uncertainty_class", "uncertainty_pair", "uncertainty_boundary",
+        "prototype", "energy", "global_tbg", "uniform_tbg",
+        "ces_class", "ces_pair", "ces_tbg",
     ])
     args = parser.parse_args()
-    root = ROOT / "artifacts" / "results" / args.dataset
+    root = ROOT / "artifacts" / "results" / args.dataset / f"shot_{args.shots}"
     rows = []
     for method in args.methods:
         path = root / method / "summary.json"
@@ -33,7 +34,7 @@ def main() -> None:
         raise FileNotFoundError(f"no summaries found below {root}")
     table_root = ROOT / "artifacts" / "tables"
     table_root.mkdir(parents=True, exist_ok=True)
-    csv_path = table_root / f"{args.dataset}_fsor.csv"
+    csv_path = table_root / f"{args.dataset}_shot{args.shots}.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=("method",) + METRICS)
         writer.writeheader(); writer.writerows(rows)
@@ -45,7 +46,7 @@ def main() -> None:
         "| {method} | {known_acc:.2f} | {auroc:.2f} | {aupr_known:.2f} | {fpr95:.2f} | {oscr:.2f} |".format(**row)
         for row in rows
     )
-    md_path = table_root / f"{args.dataset}_fsor.md"
+    md_path = table_root / f"{args.dataset}_shot{args.shots}.md"
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(csv_path); print(md_path)
 

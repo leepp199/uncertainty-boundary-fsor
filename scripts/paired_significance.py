@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paired episode-level AUROC comparison for a frozen FSOR ledger."""
+"""Paired episode-level AUROC comparison for a frozen FOAC ledger."""
 from __future__ import annotations
 
 import argparse
@@ -33,13 +33,14 @@ def episode_aurocs(payload: dict[str, np.ndarray], episodes: int) -> np.ndarray:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", required=True)
+    parser.add_argument("--shots", type=int, choices=[1, 5], required=True)
     parser.add_argument("--baseline", default="prototype")
-    parser.add_argument("--method", default="uncertainty_boundary")
+    parser.add_argument("--method", default="ces_tbg")
     parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--bootstrap", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=3420)
     args = parser.parse_args()
-    result_root = ROOT / "artifacts" / "results" / args.dataset
+    result_root = ROOT / "artifacts" / "results" / args.dataset / f"shot_{args.shots}"
     baseline = dict(np.load(result_root / args.baseline / "raw_scores.npz"))
     method = dict(np.load(result_root / args.method / "raw_scores.npz"))
     baseline_auc = episode_aurocs(baseline, args.episodes)
@@ -52,6 +53,7 @@ def main():
     statistic = wilcoxon(difference, alternative="greater", zero_method="pratt")
     output = {
         "dataset": args.dataset,
+        "shots": args.shots,
         "episodes": args.episodes,
         "baseline": args.baseline,
         "method": args.method,

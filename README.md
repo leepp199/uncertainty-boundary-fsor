@@ -1,103 +1,132 @@
-# Not All Unknowns Are Equally Hard
+# Confusability-Guided Boundary Learning for FOAC
 
-## Uncertainty-Ordered Boundary Learning for Few-Shot Open-Set Audio Recognition
+Official implementation of **Few-Shot Open-Set Audio Classification with
+Confusability-Guided Boundary Learning**.
 
-This repository studies one question: **how should pseudo-unknown
-episodes be ordered when the difficulty of class boundaries is uneven?**
+The method has two trainable stages. A ResNet-18 audio encoder is first trained
+on the meta-training classes and then frozen. Confusability-guided Episode
+Scheduling (CES) orders meta-training episodes using class uncertainty and
+class-mean cosine similarity. Task-conditioned Boundary Generation (TBG) learns
+one negative prototype for each support-derived positive prototype through a
+single-head attention conditioner and residual generator. At test
+time, the nearest positive prototype determines the candidate class, and its
+positive-to-negative similarity margin is used for open-set rejection.
 
-The method estimates class-level uncertainty from stochastic audio views and
-pairwise boundary overlap from base-class prototype similarity. Early episodes
-emphasize stable, well-separated class pairs; later episodes emphasize uncertain
-classes and their closest held-out neighbors. For each known episode class, a
-task-conditioned companion represents its local open boundary. Validation-only
-selection combines positive-prototype confidence with the corresponding
-positive-to-boundary margin for unknown rejection.
+## Paper-to-code map
 
-The repository contains no LSRB, category discovery, or class-incremental
-classifier expansion. Those components belong to the separate discovery paper.
+| Paper component | Implementation |
+|---|---|
+| Normalized embedding, Eq. (2) | `boundary_fsor/models/encoder.py` |
+| Predictive uncertainty, Eq. (3) | `boundary_fsor/training/uncertainty.py` |
+| CES distribution, Eq. (4) | `boundary_fsor/training/confusability.py` |
+| Positive prototype and task context, Eq. (5) | `boundary_fsor/models/boundary.py` |
+| TBG residual and negative prototype, Eq. (6) | `TaskConditionedBoundaryGenerator` |
+| Candidate-class margin, Eqs. (7)-(8) | `boundary_margin` |
+| Boundary hinge loss, Eq. (9) | `boundary_loss` |
+
+The executable code uses the notation in the manuscript: CES for episode
+scheduling, TBG for boundary generation, `positive` for \(p_c^+\), `negative`
+for \(p_c^-\), and `margin` for \(m_c(x)\).
 
 ## Protocol
 
-Each final episode contains a 5-way 5-shot support set, 15 known queries per
-class, and 15 queries from five label-disjoint unknown classes. Meta-training,
-validation, and final-test classes are disjoint. Hyperparameters and the
-rejection threshold are selected on validation episodes and then frozen.
+Experiments use class-disjoint meta-training, validation, and test partitions.
+Each task contains five known classes and five unknown classes. A known class
+provides either one or five support examples and 15 queries; an unknown class
+provides 15 queries and no support examples. The reported test result averages
+1,000 independently sampled tasks.
 
-Primary measures are known-class accuracy and AUROC. AUPR, FPR95, and OSCR are
-reported as complementary open-set measures.
+| Dataset | Meta-train classes | Validation classes | Test classes |
+|---|---:|---:|---:|
+| LS-100 | 0-59 | 60-79 | 80-99 |
+| NS-100 | 0-54 | 55-79 | 80-99 |
+| FSC-89 | 0-48 | 49-68 | 69-88 |
 
-## Offline workflow
+Known-class accuracy is computed before rejection. AUROC uses the candidate
+margin \(m_{c^*}(x)\), with larger values indicating known-class membership.
+For the binary decision, a query is accepted when the margin is positive.
 
-The default command performs protocol auditing, base training, feature
-extraction, all matched boundary controls, and validation-only model selection.
-It does not open the final-test classes:
+## Installation
 
-```bash
-python scripts/run_full_experiment.py --config configs/ls100.yaml --device cuda:0
-```
-
-After the curriculum choice is frozen, the same entry point produces the
-test ledger, paired significance test, difficulty analysis, and paper table:
-
-```bash
-python scripts/run_full_experiment.py --config configs/ls100.yaml \
-  --device cuda:0 --frozen-test
-```
-
-The individual stages remain callable for controlled experiments:
+Python 3.8 and CUDA-compatible PyTorch are recommended. For a network-isolated
+machine, prepare a local wheel directory and run:
 
 ```bash
+python -m pip install --no-index --find-links /path/to/wheels -r requirements.txt
+python -m pip install --no-deps -e .
 bash scripts/offline_preflight.sh
-python scripts/extract_features.py --config configs/ls100.yaml --split train
-python scripts/extract_features.py --config configs/ls100.yaml --split val
-python scripts/extract_features.py --config configs/ls100.yaml --split test
-python scripts/train_boundary.py --config configs/ls100.yaml --sampling uniform
-python scripts/train_boundary.py --config configs/ls100.yaml \
-  --sampling uncertainty --curriculum-components class --tag uncertainty_class
-python scripts/train_boundary.py --config configs/ls100.yaml \
-  --sampling uncertainty --curriculum-components pair --tag uncertainty_pair
-python scripts/train_boundary.py --config configs/ls100.yaml \
-  --sampling uncertainty --curriculum-components joint --tag uncertainty
-bash scripts/run_comparisons.sh configs/ls100.yaml
-python scripts/paired_significance.py --dataset ls100 \
-  --baseline prototype --method uncertainty_boundary
 ```
 
-Dataset and checkpoint paths are supplied through the environment variables in
-the configuration files. All executable paths are guarded for offline use and
-do not download datasets or model weights.
+No executable path downloads data or model weights. Set the local dataset and
+checkpoint paths before running an experiment:
 
-## Matched controls
+```bash
+export BOUNDARY_FSOR_LS100_DATA=/path/to/LS100
+export BOUNDARY_FSOR_LS100_CHECKPOINT=/path/to/base_checkpoint.pth
 
-- maximum positive-prototype similarity;
-- energy score;
-- one shared global boundary companion;
-- class-conditional companions with uniform episode sampling;
-- class-conditional companions with uncertainty-ordered sampling.
+export BOUNDARY_FSOR_NS100_DATA=/path/to/nsynth
+export BOUNDARY_FSOR_NS100_METADATA=/path/to/ns100_csv
+export BOUNDARY_FSOR_NS100_CHECKPOINT=/path/to/base_checkpoint.pth
 
-External methods are included only after they are rerun with the same class
-splits and episode seeds.
+export BOUNDARY_FSOR_FSC89_DATA=/path/to/FSC89
+export BOUNDARY_FSOR_FSC89_METADATA=/path/to/fsc89_csv
+export BOUNDARY_FSOR_FSC89_CHECKPOINT=/path/to/base_checkpoint.pth
+```
 
-## Implementation map
+## Reproduction
 
-- `boundary_fsor/models/`: ResNet-18 audio encoder and class-conditional
-  boundary-companion network;
-- `boundary_fsor/data/`: audio metadata, wave batching, and local-seed
-  class-disjoint 5-way 5-shot episodes;
-- `boundary_fsor/training/uncertainty.py`: entropy and mutual-information
-  uncertainty;
-- `boundary_fsor/training/curriculum.py`: class instability, pairwise intrusion risk, and the
-  easy-to-uniform-to-hard curriculum;
-- `boundary_fsor/training/base_trainer.py` and `boundary_trainer.py`: complete
-  optimization and checkpoint-selection loops;
-- `boundary_fsor/evaluation/`: AUROC, AUPR, FPR95, OSCR, and known accuracy;
-- `boundary_fsor/reproducibility/`: split, row-order, checkpoint, and environment
-  manifests;
-- `scripts/analyze_boundary_difficulty.py`: AUROC gains stratified by unknown
-  proximity to the support prototypes;
-- `scripts/build_results_table.py`: CSV and Markdown tables built only from raw
-  frozen ledgers.
+The development command trains the base encoder, extracts frozen features,
+trains the TBG controls, and evaluates validation tasks. It does not open the
+test partition.
 
-The tests cover exact support counts, split disjointness, seed isolation,
-curriculum direction, boundary correspondence, manifest hashing, and stochastic
-uncertainty behavior.
+```bash
+python scripts/run_full_experiment.py \
+  --config configs/ls100.yaml --device cuda:0 --shots 1 5
+```
+
+After the configuration is fixed, add `--frozen-test` to generate the 1-shot
+and 5-shot test ledgers, paired comparison, tables, and the NS-100 openness
+inputs used in the paper:
+
+```bash
+python scripts/run_full_experiment.py \
+  --config configs/ls100.yaml --device cuda:0 --shots 1 5 --frozen-test
+```
+
+The three principal commands are also installed as console entry points:
+
+```bash
+foac-pretrain --config configs/ls100.yaml --device cuda:0
+foac-meta-train --config configs/ls100.yaml --shots 5 --device cuda:0
+foac-evaluate --config configs/ls100.yaml --shots 5 --method ces_tbg --device cuda:0
+```
+
+## Experimental settings
+
+- 16-kHz audio, 128-bin log-Mel spectrogram, 25-ms Hann window, 10-ms hop;
+- 30 pre-training epochs with SGD, learning rate `5e-3`, weight decay `5e-4`;
+- 6,000 TBG episodes with AdamW, learning rate `3e-4`, weight decay `1e-4`;
+- one attention head with dropout probability `0.1` in TBG;
+- 10 feature-dropout predictions with dropout probability `0.3`;
+- min-max normalization with stabilizer `1e-8`;
+- CES beta scheduled linearly from `-2` to `2` over 1,500 episodes;
+- uniform mixture coefficient `epsilon=0.1`;
+- uncertainty weight `lambda_u=1`, margin `delta=0.1`, and unknown loss weight `lambda=1`.
+
+Dataset-specific settings live in `configs/`. Checkpoints, feature caches,
+manifests, raw scores, and tables are written below `artifacts/` and are ignored
+by Git.
+
+## Repository layout
+
+```text
+boundary_fsor/
+  data/              audio metadata and deterministic episode sampling
+  models/            audio encoder and task-conditioned boundary generator
+  training/          uncertainty, CES, pre-training, and meta-training
+  evaluation/        episodic scoring and open-set metrics
+  reproducibility/   split, file, checkpoint, and environment manifests
+configs/              LS-100, NS-100, and FSC-89 protocols
+scripts/              training, evaluation, auditing, and table generation
+tests/                protocol and equation-level unit tests
+```

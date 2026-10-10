@@ -41,6 +41,7 @@ def main() -> None:
                         help="Use the local checkpoint named by the config environment variable.")
     parser.add_argument("--frozen-test", action="store_true",
                         help="Open the sealed test classes and produce final tables.")
+    parser.add_argument("--shots", type=int, nargs="+", choices=[1, 5], default=None)
     args = parser.parse_args()
 
     os.environ.update({
@@ -72,27 +73,29 @@ def main() -> None:
             "--workers", args.workers, "--batch-size", args.batch_size,
         ], feature_root / f"{split}.npz", args.force)
 
+    shots_to_run = args.shots or [int(value) for value in cfg["shot_settings"]]
     training_variants = [
         ("uniform", ["--sampling", "uniform", "--tag", "uniform"]),
-        ("global", ["--sampling", "uniform", "--global-boundary", "--tag", "global"]),
-        ("uncertainty_class", [
-            "--sampling", "uncertainty", "--curriculum-components", "class",
-            "--tag", "uncertainty_class",
+        ("global", ["--sampling", "uniform", "--shared-negative", "--tag", "global"]),
+        ("ces_class", [
+            "--sampling", "ces", "--ces-components", "class",
+            "--tag", "ces_class",
         ]),
-        ("uncertainty_pair", [
-            "--sampling", "uncertainty", "--curriculum-components", "pair",
-            "--tag", "uncertainty_pair",
+        ("ces_pair", [
+            "--sampling", "ces", "--ces-components", "pair",
+            "--tag", "ces_pair",
         ]),
-        ("uncertainty", [
-            "--sampling", "uncertainty", "--curriculum-components", "joint",
-            "--tag", "uncertainty",
+        ("ces", [
+            "--sampling", "ces", "--ces-components", "joint",
+            "--tag", "ces",
         ]),
     ]
-    for tag, extra in training_variants:
-        run([
-            PYTHON, "scripts/train_boundary.py", "--config", config,
-            "--device", args.device, *extra,
-        ], checkpoint_root / f"boundary_{tag}.pth", args.force)
+    for shots in shots_to_run:
+        for tag, extra in training_variants:
+            run([
+                PYTHON, "scripts/train_boundary.py", "--config", config,
+                "--device", args.device, "--shots", shots, *extra,
+            ], checkpoint_root / f"tbg_{tag}_shot{shots}.pth", args.force)
 
     if args.frozen_test:
         run([
@@ -104,50 +107,59 @@ def main() -> None:
             "--workers", args.workers, "--batch-size", args.batch_size,
         ], feature_root / "test.npz", args.force)
 
-    evaluations = [
-        ("prototype", "prototype", None),
-        ("energy", "energy", None),
-        ("global_boundary", "global_boundary", checkpoint_root / "boundary_global.pth"),
-        ("class_boundary", "class_boundary", checkpoint_root / "boundary_uniform.pth"),
-        ("uncertainty_class", "uncertainty_boundary",
-         checkpoint_root / "boundary_uncertainty_class.pth"),
-        ("uncertainty_pair", "uncertainty_boundary",
-         checkpoint_root / "boundary_uncertainty_pair.pth"),
-        ("uncertainty_boundary", "uncertainty_boundary",
-         checkpoint_root / "boundary_uncertainty.pth"),
-    ]
-    for result_name, method, checkpoint in evaluations:
-        command = [
-            PYTHON, "scripts/evaluate_fsor.py", "--config", config,
-            "--method", method, "--result-name", result_name,
-            "--device", args.device,
+    for shots in shots_to_run:
+        evaluations = [
+            ("prototype", "prototype", None),
+            ("energy", "energy", None),
+            ("global_tbg", "global_tbg", checkpoint_root / f"tbg_global_shot{shots}.pth"),
+            ("uniform_tbg", "uniform_tbg", checkpoint_root / f"tbg_uniform_shot{shots}.pth"),
+            ("ces_class", "ces_tbg", checkpoint_root / f"tbg_ces_class_shot{shots}.pth"),
+            ("ces_pair", "ces_tbg", checkpoint_root / f"tbg_ces_pair_shot{shots}.pth"),
+            ("ces_tbg", "ces_tbg", checkpoint_root / f"tbg_ces_shot{shots}.pth"),
         ]
-        if checkpoint is not None:
-            command.extend(["--checkpoint", checkpoint])
-        if not args.frozen_test:
-            command.append("--validation-only")
-        evaluation_output = result_root / result_name / (
-            "summary.json" if args.frozen_test else "validation.json"
-        )
-        run(command, evaluation_output, args.force)
+        for result_name, method, checkpoint in evaluations:
+            command = [
+                PYTHON, "scripts/evaluate_fsor.py", "--config", config,
+                "--method", method, "--result-name", result_name,
+                "--device", args.device, "--shots", shots,
+            ]
+            if checkpoint is not None:
+                command.extend(["--checkpoint", checkpoint])
+            if not args.frozen_test:
+                command.append("--validation-only")
+            evaluation_output = result_root / f"shot_{shots}" / result_name / (
+                "summary.json" if args.frozen_test else "validation.json"
+            )
+            run(command, evaluation_output, args.force)
 
     if not args.frozen_test:
         print("Development protocol complete. Test classes were not opened.")
         return
 
-    # The first evaluation loop may have reused existing results.  These
-    # analyses consume only complete frozen ledgers.
-    run([
-        PYTHON, "scripts/paired_significance.py", "--dataset", name,
-        "--baseline", "prototype", "--method", "uncertainty_boundary",
-        "--episodes", int(cfg["test_episodes"]),
-    ], result_root / "uncertainty_boundary" / "paired_vs_prototype.json", args.force)
-    run([
-        PYTHON, "scripts/analyze_boundary_difficulty.py", "--dataset", name,
-        "--baseline", "prototype", "--method", "uncertainty_boundary",
-    ], result_root / "uncertainty_boundary" / "difficulty_vs_prototype.json", args.force)
-    run([PYTHON, "scripts/build_results_table.py", "--dataset", name],
-        ROOT / "artifacts" / "tables" / f"{name}_fsor.csv", args.force)
+    for shots in shots_to_run:
+        run([
+            PYTHON, "scripts/paired_significance.py", "--dataset", name,
+            "--shots", shots, "--baseline", "prototype", "--method", "ces_tbg",
+            "--episodes", int(cfg["test_episodes"]),
+        ], result_root / f"shot_{shots}" / "ces_tbg" / "paired_vs_prototype.json", args.force)
+        run([
+            PYTHON, "scripts/build_results_table.py", "--dataset", name,
+            "--shots", shots,
+        ], ROOT / "artifacts" / "tables" / f"{name}_shot{shots}.csv", args.force)
+
+    if 5 in shots_to_run:
+        for open_ways in (1, 3, 5, 7, 9, 12):
+            result_name = f"ces_tbg_open_{open_ways}"
+            run([
+                PYTHON, "scripts/evaluate_fsor.py", "--config", config,
+                "--method", "ces_tbg", "--result-name", result_name,
+                "--checkpoint", checkpoint_root / "tbg_ces_shot5.pth",
+                "--device", args.device, "--shots", 5,
+                "--open-ways", open_ways,
+            ], result_root / "shot_5" / result_name / "summary.json", args.force)
+        run([
+            PYTHON, "scripts/build_openness_table.py", "--dataset", name,
+        ], ROOT / "artifacts" / "tables" / f"{name}_openness.csv", args.force)
     print("Frozen test protocol complete.")
 
 

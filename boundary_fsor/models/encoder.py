@@ -42,13 +42,13 @@ class AudioEncoder(nn.Module):
         return F.normalize(features, dim=-1) if normalize else features
 
     def stochastic_predictions(self, wave: torch.Tensor, views: int):
-        probabilities, embeddings = [], []
+        embedding = self.forward(wave, augment=False)
+        probabilities = []
         for _ in range(int(views)):
-            embedding = self.forward(wave, augment=True)
             dropped = F.dropout(embedding, p=self.feature_dropout, training=True)
-            embeddings.append(embedding)
             probabilities.append(F.softmax(self.classifier(dropped), dim=-1))
-        return torch.stack(embeddings, 1), torch.stack(probabilities, 1)
+        return embedding, torch.stack(probabilities, 1)
+
 
 def load_local_checkpoint(model: AudioEncoder, path: str | Path) -> dict:
     payload = torch.load(path, map_location="cpu", weights_only=True)

@@ -5,7 +5,6 @@ import argparse
 import json
 import os
 import random
-import sys
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -16,29 +15,28 @@ import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
 
-from boundary_fsor.models.boundary import BoundaryCompanion, boundary_loss
-from boundary_fsor.config import load_config
-from boundary_fsor.data.audio import load_cache
-from boundary_fsor.data.episodes import EpisodeSampler
-from boundary_fsor.training.curriculum import BoundaryRiskTable
-from boundary_fsor.training.uncertainty import class_uncertainty, predictive_uncertainty
+from ..config import load_config
+from ..data.audio import load_cache
+from ..data.episodes import EpisodeSampler
+from ..models.boundary import TaskConditionedBoundaryGenerator, boundary_loss
+from .confusability import ConfusabilityBank, linear_beta
+from .uncertainty import class_uncertainty, predictive_uncertainty
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
-    parser.add_argument("--sampling", choices=["uniform", "uncertainty"],
-                        default="uncertainty")
-    parser.add_argument("--curriculum-components", choices=["class", "pair", "joint"],
+    parser.add_argument("--sampling", choices=["uniform", "ces"], default="ces")
+    parser.add_argument("--ces-components", choices=["class", "pair", "joint"],
                         default="joint")
-    parser.add_argument("--warmup", type=float, default=None)
+    parser.add_argument("--shots", type=int, choices=[1, 5], default=None)
     parser.add_argument("--tag", default=None)
-    parser.add_argument("--global-boundary", action="store_true")
+    parser.add_argument("--shared-negative", action="store_true")
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
     cfg = load_config(args.config)
+    shots = int(cfg["shots"] if args.shots is None else args.shots)
     seed = int(cfg["seed"])
     random.seed(seed)
     np.random.seed(seed)
@@ -57,37 +55,47 @@ def main() -> None:
         view_probabilities, cfg["uncertainty_mi_weight"],
     )
     class_scores = class_uncertainty(uncertainty, torch.from_numpy(cache["labels"]))
-    risk_table = BoundaryRiskTable.from_statistics(
+    confusability = ConfusabilityBank.from_embeddings(
         cache["embeddings"], cache["labels"], class_scores,
     )
     sampler = EpisodeSampler(
-        cache["embeddings"], cache["labels"], cfg["ways"], cfg["shots"],
+        cache["embeddings"], cache["labels"], cfg["ways"], shots,
         cfg["queries"], cfg["open_ways"], seed,
     )
-    pair_scores = risk_table.pair_score_dict()
     device = torch.device(args.device)
-    model = BoundaryCompanion(
+    model = TaskConditionedBoundaryGenerator(
         cache["embeddings"].shape[1], cfg["hidden_dim"],
-        global_only=args.global_boundary,
+        attention_heads=cfg["attention_heads"],
+        attention_dropout=cfg["attention_dropout"],
+        global_only=args.shared_negative,
     ).to(device)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=float(cfg["boundary_lr"]), weight_decay=1e-4,
+        model.parameters(), lr=float(cfg["boundary_lr"]),
+        weight_decay=float(cfg["boundary_weight_decay"]),
     )
     total = int(cfg["train_episodes"])
-    warmup = float(cfg["curriculum_warmup"] if args.warmup is None else args.warmup)
     history = []
     model.train()
     for episode_id in range(total):
-        progress = episode_id / max(total - 1, 1)
-        weights = None
-        if args.sampling == "uncertainty" and args.curriculum_components in {"class", "joint"}:
-            weights = risk_table.class_probability(progress, warmup)
-        active_pairs = (
-            pair_scores if args.sampling == "uncertainty"
-            and args.curriculum_components in {"pair", "joint"} else None
+        beta = linear_beta(
+            episode_id,
+            cfg["ces_transition_episodes"],
+            cfg["ces_beta_start"],
+            cfg["ces_beta_end"],
         )
+        known_probabilities = None
+        unknown_distribution = None
+        if args.sampling == "ces" and args.ces_components in {"class", "joint"}:
+            known_probabilities = confusability.known_distribution(
+                beta, cfg["ces_epsilon"], cfg["normalization_stabilizer"],
+            )
+        if args.sampling == "ces" and args.ces_components in {"pair", "joint"}:
+            unknown_distribution = lambda known, candidates: confusability.unknown_distribution(
+                known, candidates, beta, cfg["ces_epsilon"],
+                cfg["normalization_stabilizer"],
+            )
         episode = sampler.sample(
-            episode_id, weights, active_pairs, progress=progress, warmup=warmup,
+            episode_id, known_probabilities, unknown_distribution,
         )
         tensors = [
             torch.from_numpy(value).to(device)
@@ -96,32 +104,48 @@ def main() -> None:
                 episode.known_labels, episode.unknown_query,
             )
         ]
-        loss, terms = boundary_loss(model, *tensors, margin=cfg["margin"])
+        loss, terms = boundary_loss(
+            model, *tensors, margin=cfg["margin"],
+            unknown_weight=cfg["unknown_loss_weight"],
+        )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
         if episode_id % 100 == 0 or episode_id == total - 1:
             record = {
                 "episode": episode_id,
+                "beta": beta,
                 "loss": float(loss.detach()),
                 **{key: float(value) for key, value in terms.items()},
             }
             history.append(record)
             print(json.dumps(record))
 
-    tag = args.tag or ("global" if args.global_boundary else args.sampling)
-    output = ROOT / "artifacts" / "checkpoints" / cfg["name"] / f"boundary_{tag}.pth"
+    tag = args.tag or ("global" if args.shared_negative else args.sampling)
+    output = (
+        ROOT / "artifacts" / "checkpoints" / cfg["name"] /
+        f"tbg_{tag}_shot{shots}.pth"
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         "state_dict": model.state_dict(),
         "config_sha256": cfg["config_sha256"],
         "class_uncertainty": class_scores,
-        "boundary_risk": risk_table.state_dict(),
+        "confusability_bank": {
+            key: torch.from_numpy(value)
+            for key, value in confusability.state_dict().items()
+        },
         "history": history,
+        "shots": shots,
+        "attention_heads": int(cfg["attention_heads"]),
+        "attention_dropout": float(cfg["attention_dropout"]),
         "sampling": args.sampling,
-        "curriculum_components": args.curriculum_components,
-        "curriculum_warmup": warmup,
-        "global_boundary": args.global_boundary,
+        "ces_components": args.ces_components,
+        "ces_epsilon": float(cfg["ces_epsilon"]),
+        "ces_beta_start": float(cfg["ces_beta_start"]),
+        "ces_beta_end": float(cfg["ces_beta_end"]),
+        "ces_transition_episodes": int(cfg["ces_transition_episodes"]),
+        "shared_negative": args.shared_negative,
     }, output)
     print(output)
 

@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 
 from boundary_fsor.data.audio import load_rows
-from boundary_fsor.data.episodes import EpisodeSampler, scheduled_rank_weights
+from boundary_fsor.data.episodes import EpisodeSampler
+from boundary_fsor.training.confusability import ces_sampling_probabilities
 
 
 class ProtocolTest(unittest.TestCase):
@@ -31,8 +32,8 @@ class ProtocolTest(unittest.TestCase):
 
     def test_curriculum_moves_from_easy_to_hard(self):
         values = np.array([0.0, 0.5, 1.0])
-        early = scheduled_rank_weights(values, 0.0, 0.25)
-        late = scheduled_rank_weights(values, 1.0, 0.25)
+        early = ces_sampling_probabilities(values, -2.0, 0.1)
+        late = ces_sampling_probabilities(values, 2.0, 0.1)
         self.assertGreater(early[0], early[-1])
         self.assertGreater(late[-1], late[0])
 

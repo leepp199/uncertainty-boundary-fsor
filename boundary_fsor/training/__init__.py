@@ -1,9 +1,9 @@
-"""Uncertainty estimation and curriculum construction."""
+"""Uncertainty estimation and confusability-guided episode scheduling."""
 
-from .curriculum import BoundaryRiskTable, curriculum_rank_weights
+from .confusability import ConfusabilityBank, ces_sampling_probabilities, linear_beta
 from .uncertainty import class_uncertainty, predictive_uncertainty
 
 __all__ = [
-    "BoundaryRiskTable", "class_uncertainty", "curriculum_rank_weights",
-    "predictive_uncertainty",
+    "ConfusabilityBank", "ces_sampling_probabilities", "class_uncertainty",
+    "linear_beta", "predictive_uncertainty",
 ]
