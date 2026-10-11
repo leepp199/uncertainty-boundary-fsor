@@ -12,22 +12,6 @@ single-head attention conditioner and residual generator. At test
 time, the nearest positive prototype determines the candidate class, and its
 positive-to-negative similarity margin is used for open-set rejection.
 
-## Paper-to-code map
-
-| Paper component | Implementation |
-|---|---|
-| Normalized embedding, Eq. (2) | `boundary_fsor/models/encoder.py` |
-| Predictive uncertainty, Eq. (3) | `boundary_fsor/training/uncertainty.py` |
-| CES distribution, Eq. (4) | `boundary_fsor/training/confusability.py` |
-| Positive prototype and task context, Eq. (5) | `boundary_fsor/models/boundary.py` |
-| TBG residual and negative prototype, Eq. (6) | `TaskConditionedBoundaryGenerator` |
-| Candidate-class margin, Eqs. (7)-(8) | `boundary_margin` |
-| Boundary hinge loss, Eq. (9) | `boundary_loss` |
-
-The executable code uses the notation in the manuscript: CES for episode
-scheduling, TBG for boundary generation, `positive` for \(p_c^+\), `negative`
-for \(p_c^-\), and `margin` for \(m_c(x)\).
-
 ## Protocol
 
 Experiments use class-disjoint meta-training, validation, and test partitions.
